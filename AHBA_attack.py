@@ -65,7 +65,6 @@ def untagetattack(model: Callable,
     t_image = torch.tensor(image).float().div(255).permute(2, 0, 1)
     t_image = t_image.unsqueeze(0).to(device)
 
-
     num1 = 0
     num2 = 0
     for s_m in s_models:
@@ -73,13 +72,10 @@ def untagetattack(model: Callable,
             t_label = s_m(t_image).argmax()
             t_label = torch.tensor(t_label, device=device).unsqueeze(0)
             adv_img = attack.attack(s_m, t_image, t_label, targeted, diff_flag=True).squeeze(0)
-            # adv_img = attack.attack(s_m, t_image, t_label, targeted, diff_flag=True).squeeze(0)
             if(s_m(adv_img).argmax() == original_label):
                 adv_img = adv_img.unsqueeze(0)
-                # adv_img = attack.attack(s_m, adv_img, original_label.unsqueeze(0).to(device), targeted, diff_flag=True).squeeze(0)
                 adv_img = attack.attack(s_m, adv_img, original_label.unsqueeze(0).to(device), targeted,
                                         diff_flag=True).squeeze(0)
-
 
             delta = adv_img.permute(1, 2, 0).cpu().numpy() * 255 - image
             delta = np.round(delta)
@@ -137,13 +133,6 @@ def bound_search(model, image, label, delta, alpha=1, iters=100, targeted=False)
             else:
                 return lower, upper, True, num
 
-            # import imageio
-            # tmp = upper
-            # f = open('l2.txt', 'a+', encoding='utf-8')
-            # f.write(str(np.linalg.norm(tmp/255)) + '\n')
-            # # 获得绕动图片
-            # imageio.imsave('delta_cifar100/delta_bound_' + str(_) + '.png', tmp)
-
 
     else:
         # inside the region of interest. Decrease the noise
@@ -158,13 +147,6 @@ def bound_search(model, image, label, delta, alpha=1, iters=100, targeted=False)
                 lower = np.clip(adv, 0, 255) - image
             else:
                 return lower, upper, True, num
-
-            # import imageio
-            # tmp = lower
-            # f = open('l2.txt', 'a+', encoding='utf-8')
-            # f.write(str(np.linalg.norm(tmp / 255)) + '\n')
-            # # 获得绕动图片
-            # imageio.imsave('delta_cifar100/delta_bound_' + str(_) + '.png', tmp)
 
     return np.zeros_like(delta), np.round(delta / delta.max() * 255), False, num
 
@@ -193,17 +175,6 @@ def binary_search(model, image, label, lower, upper, steps=10, targeted=False,te
             found = True
         diff = upper - lower
 
-        # import imageio
-        # tmp = upper
-        # f = open('l2.txt', 'a+', encoding='utf-8')
-        # f.write(str(np.linalg.norm(tmp / 255)) + '\n')
-        # # 获得绕动图片
-        # imageio.imsave('delta_cifar100/delta_bin_' + str(_) + '.png', tmp)
-
-        # if diff.max() <= 1 and diff.min() >= -1:
-        #     return upper, found, num
-
-
-
-
+        if diff.max() <= 1 and diff.min() >= -1:
+            return upper, found, num
     return upper, found, num

@@ -104,13 +104,12 @@ def sampletoarray(sample):
     sample = sample[..., ::-1].astype(np.uint8)
     return sample
 
+
 def preprocess(img):
-    # img = image.load_img(sample_path, target_size=(64, 64))
     x = image.img_to_array(img)
     x = np.expand_dims(x, axis=0)
     x = preprocess_input(x)
     return x
-
 
 def get_diff(sample_1, sample_2):
     sample_1 = sample_1.reshape(3, 64, 64)
@@ -120,9 +119,7 @@ def get_diff(sample_1, sample_2):
         diff.append(np.linalg.norm((channel - sample_2[i]).astype(np.float32)))
     return np.array(diff)
 
-
 def boundary_attack(initial_sample, target_sample, img_i):
-
     initial_sample = preprocess(initial_sample)
     target_sample = preprocess(target_sample)
     classifier = ResNet50(weights='imagenet')
@@ -131,7 +128,6 @@ def boundary_attack(initial_sample, target_sample, img_i):
     draw(np.copy(initial_sample), classifier, folder, flag=True)
     draw(np.copy(target_sample), classifier, folder)
 
-    # print("Shape: ", initial_sample.shape, target_sample.shape)
     attack_class = np.argmax(classifier.predict(initial_sample))
     target_class = np.argmax(classifier.predict(target_sample))
 
@@ -140,14 +136,12 @@ def boundary_attack(initial_sample, target_sample, img_i):
     n_calls = 0
     epsilon = 1.
     delta = 0.1
-    lastnorm = 0
     # Move first step to the boundary
     while True:
         trial_sample = adversarial_sample + forward_perturbation(epsilon * get_diff(adversarial_sample, target_sample),
                                                                  adversarial_sample, target_sample)
         prediction = classifier.predict(trial_sample.reshape(1, 64, 64, 3))
         n_calls += 1
-        # print("delta:", delta)
         if np.argmax(prediction) == attack_class:
             adversarial_sample = trial_sample
             break
@@ -156,13 +150,10 @@ def boundary_attack(initial_sample, target_sample, img_i):
         else:
             epsilon *= 0.9
     while True:
-        # print("Step #{}...".format(n_steps))
         min_diff = 656556
-        # print("\tDelta step...")
         d_step = 0
         while True:
             d_step += 1
-            # print("\t#{}".format(d_step))
             trial_samples = []
             for i in np.arange(10):
                 trial_sample = adversarial_sample + orthogonal_perturbation(delta, adversarial_sample, target_sample)
@@ -180,11 +171,9 @@ def boundary_attack(initial_sample, target_sample, img_i):
                 break
             else:
                 delta *= 0.9
-        # print("\tEpsilon step...")
         e_step = 0
         while True:
             e_step += 1
-            # print("\t#{}".format(e_step))
             trial_sample = adversarial_sample + forward_perturbation(
                 epsilon * get_diff(adversarial_sample, target_sample), adversarial_sample, target_sample)
             prediction = classifier.predict(trial_sample.reshape(1, 64, 64, 3))
@@ -200,53 +189,42 @@ def boundary_attack(initial_sample, target_sample, img_i):
         n_steps += 1
         chkpts = [1, 5, 10, 50, 100, 500]
         if (n_steps in chkpts) or (n_steps % 500 == 0):
-            # print("{} steps".format(n_steps))
             draw(np.copy(adversarial_sample), classifier, folder, n_calls,
-                 norm=np.linalg.norm((sampletoarray(np.copy(target_sample))-sampletoarray(np.copy(adversarial_sample)))/255))
+                 norm=np.linalg.norm(
+                     (sampletoarray(np.copy(target_sample)) - sampletoarray(np.copy(adversarial_sample))) / 255))
         diff = np.mean(get_diff(adversarial_sample, target_sample))
-        # norm = np.linalg.norm((adversarial_sample - target_sample)/255)
-        # normdiff = abs(lastnorm - norm)
         if min_diff < diff:
             min_diff = diff
 
-
-        print("step: ", n_steps, ", norm is ", np.linalg.norm((sampletoarray(np.copy(initial_sample))-sampletoarray(np.copy(adversarial_sample)))/255))
-
+        print("step: ", n_steps, ", norm is ", np.linalg.norm((sampletoarray(np.copy(initial_sample))
+                                                               - sampletoarray(np.copy(adversarial_sample))) / 255))
         if diff <= 1e-3 or e_step > 500 or n_steps == 1000 or (diff - min_diff) > 100:
-            # print("{} steps".format(n_steps))
-            # # print("Norm Diff is ", normdiff)
-            # print("Mean Squared Error: {}".format(diff))
 
             draw(np.copy(adversarial_sample), classifier, folder, n_calls,
-                 norm=np.linalg.norm((sampletoarray(np.copy(target_sample))-sampletoarray(np.copy(adversarial_sample)))/255))
+                 norm=np.linalg.norm(
+                     (sampletoarray(np.copy(target_sample)) - sampletoarray(np.copy(adversarial_sample))) / 255))
             adversarial_sample = sampletoarray(adversarial_sample)
             target_sample = sampletoarray(target_sample)
 
             upper = adversarial_sample - target_sample
             lower = target_sample - target_sample
-            # print(adversarial_sample)
             for _ in range(100):
                 trial_sample = adversarial_sample
-                middle = np.round((upper + lower)/2)
+                middle = np.round((upper + lower) / 2)
                 middle = np.clip(trial_sample + middle, 0, 255) - trial_sample
-                # print(np.linalg.norm(middle/255))
                 trial_class = np.argmax(classifier.predict(preprocess(trial_sample + middle)))
                 if trial_class == attack_class:
                     lower = middle
                 else:
                     upper = middle
                 diff_bin = upper - lower
-                # print("upper - lower: ", diff_bin)
-
 
                 if abs(diff_bin.max()) <= 1 and abs(diff_bin.min()) <= 1:
                     trial_sample = trial_sample + lower
                     trial_sample = preprocess(trial_sample)
-                    # print(target_sample, trial_sample)
-                    draw(np.copy(trial_sample), classifier, folder, n_calls+_,
-                         norm=np.linalg.norm((target_sample - sampletoarray(np.copy(trial_sample)))/255))
+                    draw(np.copy(trial_sample), classifier, folder, n_calls + _,
+                         norm=np.linalg.norm((target_sample - sampletoarray(np.copy(trial_sample))) / 255))
                     break
-
             break
     global all_test_norm
     global all_test_num
@@ -254,9 +232,8 @@ def boundary_attack(initial_sample, target_sample, img_i):
     global min_norm
     global min_call
     global max_norm
-    norm = np.linalg.norm(((target_sample - sampletoarray(np.copy(trial_sample)))/255))
-
-    f.write(str(img_i)+'\t'+str(norm)+'\n')
+    norm = np.linalg.norm(((target_sample - sampletoarray(np.copy(trial_sample))) / 255))
+    f.write(str(img_i) + '\t' + str(norm) + '\n')
     print("norm is ", norm)
     all_test_norm += norm
     all_test_num += n_calls
@@ -268,15 +245,15 @@ def boundary_attack(initial_sample, target_sample, img_i):
         max_norm = norm
     if min_norm > norm:
         min_norm = norm
+
+
 all_test_num = 0
 all_test_norm = 0
 max_norm = -65535
 min_norm = 65536
 max_call = -65535
 min_call = 65536
-image_count = 100 # 执行次数
-
-
+image_count = 100  # the number of test example
 
 if __name__ == "__main__":
     f = open('norm.txt', 'w', encoding='utf-8')
@@ -295,7 +272,7 @@ if __name__ == "__main__":
     test_transform = transforms.Compose([transforms.ToTensor()])
     test_dataset = dataset.TinyImageNet(args.data, mode='test', transform=test_transform)
     start_time = time.time()
-    for i in range(200, 200+image_count):
+    for i in range(200, 200 + image_count):
         img = imread('data/img.png')
         initial_sample = imageio.core.util.Array(test_dataset.__getitem__(i)[0].permute(1, 2, 0).cpu().numpy() * 255)
         target_sample = img
@@ -305,8 +282,8 @@ if __name__ == "__main__":
     print("执行时间: ", end_time - start_time)
     print("最大范数: ", max_norm)
     print("最小范数: ", min_norm)
-    print("平均范数: ", all_test_norm/image_count)
+    print("平均范数: ", all_test_norm / image_count)
     print("最大call: ", max_call)
     print("最小call: ", min_call)
-    print("平均calls: ", all_test_num/image_count)
+    print("平均calls: ", all_test_num / image_count)
     f.close()

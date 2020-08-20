@@ -80,10 +80,7 @@ class DDN:
         norm = torch.full((batch_size,), self.init_norm, device=self.device, dtype=torch.float)
         worst_norm = torch.max(inputs, 1 - inputs).view(batch_size, -1).norm(p=2, dim=1)
 
-        # print("labels:")
-        # print(labels)
         # Setup optimizers
-
         optimizer = optim.SGD([delta], lr=1)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.steps, eta_min=0.01)
 
@@ -139,20 +136,11 @@ class DDN:
             if self.quantize:
                 delta.data.mul_(self.levels - 1).round_().div_(self.levels - 1)
             delta.data.clamp_(0, 1).sub_(inputs)
-
-            # if diff_flag and is_both and i > 10:
-            #     return inputs + best_delta
-            # if not diff_flag and is_adv and i > 30:
-            #     return inputs + best_delta
-
-            # import imageio
-            # tmp = best_delta.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255
-            # f = open('l2.txt', 'a+', encoding='utf-8')
-            # import numpy as np
-            # f.write(str(np.linalg.norm(tmp / 255)) + '\n')
-            # # 获得绕动图片
-            # imageio.imsave('delta_cifar100/delta_' + str(i) + '.png', tmp)
-
+            # Exit on condition
+            if diff_flag and is_both and i > 10:
+                return inputs + best_delta
+            if not diff_flag and is_adv and i > 30:
+                return inputs + best_delta
 
         if self.max_norm:
             best_delta.renorm_(p=2, dim=0, maxnorm=self.max_norm)
