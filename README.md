@@ -1,11 +1,22 @@
 # Black-Box-Attack
-黑盒对抗攻击项目
-<<<<<<< HEAD
+黑盒对抗攻击项目 --AHBA算法
 =======
 
-/net1 和 /net2 是两个网络模型，其中的txt文件名称代表accuracy
+model是模型的网络结构
 
-load_mnist.py 是读取数据集并返回相应的数据
+pretrained_model是预训练的模型
 
-/mnist_data 是包含mnist训练集和测试集的文件夹
->>>>>>> init commit
+dataset.py：导入tinyimagenet数据集
+
+AHBA_attack.py：调用具体攻击方式，并实现边界搜索和二分搜索
+
+AHBA_targeted_attack.py：有目标攻击
+
+AHBA_untargeted_attack_tiny.py：无目标攻击
+
+better_dnn.py：改进的dnn
+
+cifar10_test.py：在cifar10中进行无目标攻击测试
+
+cifar100_test.py：在cifar100中进行无目标攻击测试
+
