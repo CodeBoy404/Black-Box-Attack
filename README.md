@@ -6,13 +6,15 @@ model是模型的网络结构
 
 pretrained_model是预训练的模型
 
+AHBA_attack_main.py:进行有目标和无目标攻击演示
+
 dataset.py：导入tinyimagenet数据集
 
 AHBA_attack.py：调用具体攻击方式，并实现边界搜索和二分搜索
 
 AHBA_targeted_attack.py：有目标攻击
 
-AHBA_untargeted_attack_tiny.py：无目标攻击
+AHBA_untargeted_attack.py：无目标攻击
 
 better_dnn.py：改进的dnn
 
