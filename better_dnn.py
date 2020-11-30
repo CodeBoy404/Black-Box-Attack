@@ -78,7 +78,7 @@ class DDN:
         multiplier = 1 if targeted else -1
         delta = torch.zeros_like(inputs, requires_grad=True)
         norm = torch.full((batch_size,), self.init_norm, device=self.device, dtype=torch.float)
-        worst_norm = torch.max(inputs, 1 - inputs).view(batch_size, -1).norm(p=2, dim=1)
+        worst_norm = torch.max(inputs, 1 - inputs).contiguous().view(batch_size, -1).norm(p=2, dim=1)
 
         # Setup optimizers
         optimizer = optim.SGD([delta], lr=1)

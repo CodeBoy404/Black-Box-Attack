@@ -15,9 +15,9 @@ from AHBA_attack import untagetattack, bound_search, binary_search
 start_time = time()
 
 parser = argparse.ArgumentParser('1000time Attack example')
-parser.add_argument('data', help='path to dataset')
+parser.add_argument('data', default='data', help='path to dataset')
 parser.add_argument('--model-path', '--m', required=True)
-parser.add_argument('--surrogate-model-path', '--sm', required=True)
+parser.add_argument('--surrogate-model-path', '--sm', default="resnext50_32x4d_ddn.pt")
 parser.add_argument('--workers', default=2, type=int, help='number of data loading workers')
 parser.add_argument('--batch-size', '-b', default=64, type=int, help='mini-batch size')
 
@@ -82,9 +82,9 @@ max_call = -65535
 min_call = 65536
 
 # the number of test example
-times = 200
+times = 1000
 
-for i in range(0, times):
+for i in range(100, 200):
     img = imageio.core.util.Array(test_dataset.__getitem__(i)[0].permute(1, 2, 0).cpu().numpy() * 255)
 
     label = black_box_model(img)
@@ -104,8 +104,8 @@ for i in range(0, times):
         else:
             # attack success
             all_test_num = all_test_num + test_num
-            l2_norm = np.linalg.norm(((adv - img) / 255))
-            # print(l2_norm)
+            l2_norm = np.linalg.norm(((adv.astype(np.float32) - img.astype(np.float32)) / 255))
+            print(i, " ", l2_norm)
             all_l2_norm = all_l2_norm + l2_norm
 
     else:
@@ -116,8 +116,8 @@ for i in range(0, times):
             error_num = error_num + 1
         else:
             all_test_num = all_test_num + test_num
-            l2_norm = np.linalg.norm(((adv - img) / 255))
-            # print(l2_norm)
+            l2_norm = np.linalg.norm(((adv.astype(np.float32) - img.astype(np.float32)) / 255))
+            print(i, " ", l2_norm)
             all_l2_norm = all_l2_norm + l2_norm
     if l2_norm > max_norm:
         max_norm = l2_norm
