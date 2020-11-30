@@ -74,7 +74,7 @@ def get_converted_prediction(sample, classifier):
     return label
 
 
-def draw(sample, classifier, folder, n_call=0, flag=False, norm=0):
+def draw(sample, classifier, folder, n_call=0, flag=False, norm=0, path="images"):
     label = get_converted_prediction(np.copy(sample), classifier)
     sample = sample.reshape(64, 64, 3)
     # Reverse preprocessing, see https://github.com/keras-team/keras/blob/master/keras/applications/imagenet_utils.py
@@ -89,9 +89,9 @@ def draw(sample, classifier, folder, n_call=0, flag=False, norm=0):
 
     # Save with predicted label for image (may not be adversarial due to uint8 conversion)
     if flag:
-        sample.save(os.path.join("images", folder, "{}_{}_original.png".format(id_no, label)))
+        sample.save(os.path.join(path, folder, "{}_{}_original.png".format(id_no, label)))
     else:
-        sample.save(os.path.join("images", folder, "{}_{}_{}_{}.png".format(id_no, label, n_call, norm)))
+        sample.save(os.path.join(path, folder, "{}_{}_{}_{}.png".format(id_no, label, n_call, norm)))
 
 
 def sampletoarray(sample):
@@ -111,6 +111,7 @@ def preprocess(img):
     x = preprocess_input(x)
     return x
 
+
 def get_diff(sample_1, sample_2):
     sample_1 = sample_1.reshape(3, 64, 64)
     sample_2 = sample_2.reshape(3, 64, 64)
@@ -119,14 +120,14 @@ def get_diff(sample_1, sample_2):
         diff.append(np.linalg.norm((channel - sample_2[i]).astype(np.float32)))
     return np.array(diff)
 
-def boundary_attack(initial_sample, target_sample, img_i):
+
+def boundary_attack(initial_sample, target_sample, paths="images", classifier=ResNet50(weights='imagenet'), img_i=-1):
     initial_sample = preprocess(initial_sample)
     target_sample = preprocess(target_sample)
-    classifier = ResNet50(weights='imagenet')
     folder = time.strftime('%Y%m%d_%H%M%S', datetime.datetime.now().timetuple())
-    os.mkdir(os.path.join("images", folder))
-    draw(np.copy(initial_sample), classifier, folder, flag=True)
-    draw(np.copy(target_sample), classifier, folder)
+    os.mkdir(os.path.join(paths, folder))
+    draw(np.copy(initial_sample), classifier, folder, flag=True, path=paths)
+    draw(np.copy(target_sample), classifier, folder, path=paths)
 
     attack_class = np.argmax(classifier.predict(initial_sample))
     target_class = np.argmax(classifier.predict(target_sample))
@@ -136,6 +137,9 @@ def boundary_attack(initial_sample, target_sample, img_i):
     n_calls = 0
     epsilon = 1.
     delta = 0.1
+    min_diff = 656556
+    min_norm_1 = 255
+    min_norm_adv = initial_sample
     # Move first step to the boundary
     while True:
         trial_sample = adversarial_sample + forward_perturbation(epsilon * get_diff(adversarial_sample, target_sample),
@@ -150,7 +154,6 @@ def boundary_attack(initial_sample, target_sample, img_i):
         else:
             epsilon *= 0.9
     while True:
-        min_diff = 656556
         d_step = 0
         while True:
             d_step += 1
@@ -190,20 +193,26 @@ def boundary_attack(initial_sample, target_sample, img_i):
         chkpts = [1, 5, 10, 50, 100, 500]
         if (n_steps in chkpts) or (n_steps % 500 == 0):
             draw(np.copy(adversarial_sample), classifier, folder, n_calls,
-                 norm=np.linalg.norm(
-                     (sampletoarray(np.copy(target_sample)) - sampletoarray(np.copy(adversarial_sample))) / 255))
+                 norm=np.linalg.norm((sampletoarray(np.copy(target_sample)).astype(np.float32) -
+                                     sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255), path=paths)
         diff = np.mean(get_diff(adversarial_sample, target_sample))
-        if min_diff < diff:
-            min_diff = diff
-
-        print("step: ", n_steps, ", norm is ", np.linalg.norm((sampletoarray(np.copy(initial_sample))
-                                                               - sampletoarray(np.copy(adversarial_sample))) / 255))
-        if diff <= 1e-3 or e_step > 500 or n_steps == 1000 or (diff - min_diff) > 100:
-
+        tmp_norm = np.linalg.norm((sampletoarray(np.copy(target_sample)).astype(np.float32) -
+                                     sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255)
+        # print("step: ", n_steps, ", norm is ", tmp_norm)
+        if tmp_norm < min_norm_1 and np.argmax(classifier.predict(adversarial_sample)) == attack_class:
+            min_norm_1 = tmp_norm
+            min_norm_adv = np.copy(adversarial_sample)
+        if diff <= 1e-3 or e_step > 500 or (n_steps > 1000 and tmp_norm - min_norm_1 > 0.1) \
+                or (min_norm_1 < 5 and tmp_norm - min_norm_1 > 0.5):
+            tmp_norm2 = np.linalg.norm(
+                     ((sampletoarray(np.copy(target_sample)).astype(np.float32) -
+                                     sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255))
             draw(np.copy(adversarial_sample), classifier, folder, n_calls,
-                 norm=np.linalg.norm(
-                     (sampletoarray(np.copy(target_sample)) - sampletoarray(np.copy(adversarial_sample))) / 255))
-            adversarial_sample = sampletoarray(adversarial_sample)
+                 norm=tmp_norm2, path=paths)
+            if min_norm_1 < tmp_norm2:
+                adversarial_sample = sampletoarray(np.copy(min_norm_adv))
+            else:
+                adversarial_sample = sampletoarray(adversarial_sample)
             target_sample = sampletoarray(target_sample)
 
             upper = adversarial_sample - target_sample
@@ -223,17 +232,26 @@ def boundary_attack(initial_sample, target_sample, img_i):
                     trial_sample = trial_sample + lower
                     trial_sample = preprocess(trial_sample)
                     draw(np.copy(trial_sample), classifier, folder, n_calls + _,
-                         norm=np.linalg.norm((target_sample - sampletoarray(np.copy(trial_sample))) / 255))
+                         norm=np.linalg.norm((target_sample.astype(np.float32)
+                                             - adversarial_sample.astype(np.float32)) / 255), path=paths)
+                    n_calls = n_calls + _
                     break
+            # print("min_norm:", min_norm_1)
+            draw(np.copy(min_norm_adv), classifier, folder, 0,
+                 norm=np.linalg.norm((target_sample.astype(np.float32)
+                                      - sampletoarray(min_norm_adv).astype(np.float32)) / 255), path=paths)
             break
+        if min_diff > diff:
+            min_diff = diff
     global all_test_norm
     global all_test_num
     global max_call
     global min_norm
     global min_call
     global max_norm
-    norm = np.linalg.norm(((target_sample - sampletoarray(np.copy(trial_sample))) / 255))
-    f.write(str(img_i) + '\t' + str(norm) + '\n')
+    norm = np.linalg.norm(((target_sample.astype(np.float32) - adversarial_sample.astype(np.float32)) / 255))
+    if img_i > -1:
+        f.write(str(img_i) + '\t' + str(norm) + '\n')
     print("norm is ", norm)
     all_test_norm += norm
     all_test_num += n_calls
@@ -277,13 +295,15 @@ if __name__ == "__main__":
         initial_sample = imageio.core.util.Array(test_dataset.__getitem__(i)[0].permute(1, 2, 0).cpu().numpy() * 255)
         target_sample = img
 
-        boundary_attack(initial_sample, target_sample, i)
-    end_time = time.time()
-    print("执行时间: ", end_time - start_time)
-    print("最大范数: ", max_norm)
-    print("最小范数: ", min_norm)
-    print("平均范数: ", all_test_norm / image_count)
-    print("最大call: ", max_call)
-    print("最小call: ", min_call)
-    print("平均calls: ", all_test_num / image_count)
+        boundary_attack(initial_sample, target_sample, img_i=i)
+        if (i - 199) % 10 == 0:
+            end_time = time.time()
+            print("样本数量：", i - 199)
+            print("执行时间: ", end_time - start_time)
+            print("最大范数: ", max_norm)
+            print("最小范数: ", min_norm)
+            print("平均范数: ", all_test_norm / (i - 199))
+            print("最大call: ", max_call)
+            print("最小call: ", min_call)
+            print("平均calls: ", all_test_num / (i - 199))
     f.close()
