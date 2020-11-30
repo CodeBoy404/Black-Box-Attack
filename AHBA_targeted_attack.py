@@ -121,18 +121,47 @@ def get_diff(sample_1, sample_2):
     return np.array(diff)
 
 
+def binary_search(adversarial_sample, target_sample, attack_class, classifier, folder, paths, n_calls):
+    adversarial_sample = sampletoarray(adversarial_sample)
+    target_sample = sampletoarray(target_sample)
+
+    upper = adversarial_sample - target_sample
+    lower = target_sample - target_sample
+    trial_sample = adversarial_sample
+    for _ in range(100):
+        middle = np.round((upper + lower) / 2)
+        middle = np.clip(trial_sample + middle, 0, 255) - trial_sample
+        trial_class = np.argmax(classifier.predict(preprocess(trial_sample + middle)))
+        if trial_class == attack_class:
+            lower = middle
+        else:
+            upper = middle
+        diff_bin = upper - lower
+
+        if (abs(diff_bin.max()) <= 1 and abs(diff_bin.min()) <= 1) or _ == 99:
+            trial_sample = trial_sample + lower
+            trial_sample = preprocess(trial_sample)
+            draw(np.copy(trial_sample), classifier, folder, n_calls + _,
+                 norm=np.linalg.norm((target_sample.astype(np.float32)
+                                      - sampletoarray(np.copy(trial_sample)).astype(np.float32)) / 255), path=paths)
+            n_calls = n_calls + _
+            break
+    return trial_sample
+
+
 def boundary_attack(initial_sample, target_sample, paths="images", classifier=ResNet50(weights='imagenet'), img_i=-1):
     initial_sample = preprocess(initial_sample)
     target_sample = preprocess(target_sample)
-    folder = time.strftime('%Y%m%d_%H%M%S', datetime.datetime.now().timetuple())
+    if img_i > -1:
+        folder = time.strftime('%Y%m%d_%H%M%S', datetime.datetime.now().timetuple()) + "_" + str(img_i)
+    else:
+        folder = time.strftime('%Y%m%d_%H%M%S', datetime.datetime.now().timetuple())
     os.mkdir(os.path.join(paths, folder))
     draw(np.copy(initial_sample), classifier, folder, flag=True, path=paths)
     draw(np.copy(target_sample), classifier, folder, path=paths)
 
     attack_class = np.argmax(classifier.predict(initial_sample))
-    target_class = np.argmax(classifier.predict(target_sample))
 
-    adversarial_sample = initial_sample
     n_steps = 0
     n_calls = 0
     epsilon = 1.
@@ -140,7 +169,15 @@ def boundary_attack(initial_sample, target_sample, paths="images", classifier=Re
     min_diff = 656556
     min_norm_1 = 255
     min_norm_adv = initial_sample
+    init_norm = np.linalg.norm((sampletoarray(np.copy(target_sample)).astype(np.float32) -
+                           sampletoarray(np.copy(initial_sample)).astype(np.float32)) / 255)
+    print("初始norm：", init_norm)
     # Move first step to the boundary
+    adversarial_sample = binary_search(np.copy(initial_sample), np.copy(target_sample), attack_class, classifier, folder
+                                       , paths, n_calls)
+    init_norm_2 = np.linalg.norm((sampletoarray(np.copy(target_sample)).astype(np.float32) -
+                           sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255)
+    print("二分搜索norm：", init_norm_2)
     while True:
         trial_sample = adversarial_sample + forward_perturbation(epsilon * get_diff(adversarial_sample, target_sample),
                                                                  adversarial_sample, target_sample)
@@ -194,10 +231,10 @@ def boundary_attack(initial_sample, target_sample, paths="images", classifier=Re
         if (n_steps in chkpts) or (n_steps % 500 == 0):
             draw(np.copy(adversarial_sample), classifier, folder, n_calls,
                  norm=np.linalg.norm((sampletoarray(np.copy(target_sample)).astype(np.float32) -
-                                     sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255), path=paths)
+                                      sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255), path=paths)
         diff = np.mean(get_diff(adversarial_sample, target_sample))
         tmp_norm = np.linalg.norm((sampletoarray(np.copy(target_sample)).astype(np.float32) -
-                                     sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255)
+                                   sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255)
         # print("step: ", n_steps, ", norm is ", tmp_norm)
         if tmp_norm < min_norm_1 and np.argmax(classifier.predict(adversarial_sample)) == attack_class:
             min_norm_1 = tmp_norm
@@ -205,40 +242,43 @@ def boundary_attack(initial_sample, target_sample, paths="images", classifier=Re
         if diff <= 1e-3 or e_step > 500 or (n_steps > 1000 and tmp_norm - min_norm_1 > 0.1) \
                 or (min_norm_1 < 5 and tmp_norm - min_norm_1 > 0.5):
             tmp_norm2 = np.linalg.norm(
-                     ((sampletoarray(np.copy(target_sample)).astype(np.float32) -
-                                     sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255))
+                ((sampletoarray(np.copy(target_sample)).astype(np.float32) -
+                  sampletoarray(np.copy(adversarial_sample)).astype(np.float32)) / 255))
             draw(np.copy(adversarial_sample), classifier, folder, n_calls,
                  norm=tmp_norm2, path=paths)
             if min_norm_1 < tmp_norm2:
-                adversarial_sample = sampletoarray(np.copy(min_norm_adv))
+                adversarial_sample = np.copy(min_norm_adv)
             else:
-                adversarial_sample = sampletoarray(adversarial_sample)
-            target_sample = sampletoarray(target_sample)
+                adversarial_sample = adversarial_sample
+            adversarial_sample = binary_search(np.copy(adversarial_sample).astype(np.float32),
+                                               np.copy(target_sample).astype(np.float32), attack_class,
+                                               classifier, folder
+                                               , paths, n_calls)
+            # upper = adversarial_sample - target_sample
+            # lower = target_sample - target_sample
 
-            upper = adversarial_sample - target_sample
-            lower = target_sample - target_sample
-            for _ in range(100):
-                trial_sample = adversarial_sample
-                middle = np.round((upper + lower) / 2)
-                middle = np.clip(trial_sample + middle, 0, 255) - trial_sample
-                trial_class = np.argmax(classifier.predict(preprocess(trial_sample + middle)))
-                if trial_class == attack_class:
-                    lower = middle
-                else:
-                    upper = middle
-                diff_bin = upper - lower
-
-                if abs(diff_bin.max()) <= 1 and abs(diff_bin.min()) <= 1:
-                    trial_sample = trial_sample + lower
-                    trial_sample = preprocess(trial_sample)
-                    draw(np.copy(trial_sample), classifier, folder, n_calls + _,
-                         norm=np.linalg.norm((target_sample.astype(np.float32)
-                                             - adversarial_sample.astype(np.float32)) / 255), path=paths)
-                    n_calls = n_calls + _
-                    break
+            # for _ in range(100):
+            #     trial_sample = adversarial_sample
+            #     middle = np.round((upper + lower) / 2)
+            #     middle = np.clip(trial_sample + middle, 0, 255) - trial_sample
+            #     trial_class = np.argmax(classifier.predict(preprocess(trial_sample + middle)))
+            #     if trial_class == attack_class:
+            #         lower = middle
+            #     else:
+            #         upper = middle
+            #     diff_bin = upper - lower
+            #
+            #     if abs(diff_bin.max()) <= 1 and abs(diff_bin.min()) <= 1:
+            #         trial_sample = trial_sample + lower
+            #         trial_sample = preprocess(trial_sample)
+            #         draw(np.copy(trial_sample), classifier, folder, n_calls + _,
+            #              norm=np.linalg.norm((target_sample.astype(np.float32)
+            #                                   - adversarial_sample.astype(np.float32)) / 255), path=paths)
+            #         n_calls = n_calls + _
+            #         break
             # print("min_norm:", min_norm_1)
             draw(np.copy(min_norm_adv), classifier, folder, 0,
-                 norm=np.linalg.norm((target_sample.astype(np.float32)
+                 norm=np.linalg.norm((sampletoarray(np.copy(target_sample)).astype(np.float32)
                                       - sampletoarray(min_norm_adv).astype(np.float32)) / 255), path=paths)
             break
         if min_diff > diff:
@@ -271,7 +311,7 @@ max_norm = -65535
 min_norm = 65536
 max_call = -65535
 min_call = 65536
-image_count = 100  # the number of test example
+image_count = 400  # the number of test example
 
 if __name__ == "__main__":
     f = open('norm.txt', 'w', encoding='utf-8')

@@ -71,6 +71,8 @@ if __name__ == "__main__":
                 print("攻击失败")
             else:
                 # attack success
+                print("原始图片类别：",black_box_model(img))
+                print("对抗性图片类别：", black_box_model(adv))
                 print("call次数：", test_num)
                 path = path + "/adv.png"
                 imwrite(path, adv)
@@ -84,6 +86,8 @@ if __name__ == "__main__":
             if adv is None or black_box_model(img) == black_box_model(adv):
                 print("攻击失败")
             else:
+                print("原始图片类别：",black_box_model(img))
+                print("对抗性图片类别：", black_box_model(adv))
                 print("call次数：", test_num)
                 path = path + "/adv.png"
                 imwrite(path, adv)
