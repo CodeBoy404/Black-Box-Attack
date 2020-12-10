@@ -125,8 +125,8 @@ def binary_search(adversarial_sample, target_sample, attack_class, classifier, f
     adversarial_sample = sampletoarray(adversarial_sample)
     target_sample = sampletoarray(target_sample)
 
-    upper = adversarial_sample - target_sample
-    lower = target_sample - target_sample
+    upper = np.copy(target_sample).astype(np.float32) - np.copy(adversarial_sample).astype(np.float32)
+    lower = np.copy(target_sample).astype(np.float32) - np.copy(target_sample).astype(np.float32)
     trial_sample = adversarial_sample
     for _ in range(100):
         middle = np.round((upper + lower) / 2)
