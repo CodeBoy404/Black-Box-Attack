@@ -22,8 +22,8 @@ from AHBA_attack import untagetattack
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('Attack example')
     parser.add_argument('--data', '--f', help='path to save image', default='data')
-    parser.add_argument('--model-path', '--m', default='resnet18_clean.pt', help='path to AttackModel')
-    parser.add_argument('--surrogate-model-path', '--sm', default="resnext50_32x4d_ddn.pt", help='path to surrogateModel')
+    parser.add_argument('--model-path', '--m', default='pretrained_model/imagenet/resnet18_clean.pt', help='path to AttackModel')
+    parser.add_argument('--surrogate-model-path', '--sm', default="pretrained_model/imagenet/resnext50_32x4d_ddn.pt", help='path to surrogateModel')
     parser.add_argument('--targeted', '--t', default=0, type=int, help='0 is untargeted, 1 is targeted')
     parser.add_argument('--attack-image', '--i', default="data/img.png", help='path to attack_image')
     parser.add_argument('--attack-Class', '--c', default="data/img1.png", help='path to the image of attack Class')
